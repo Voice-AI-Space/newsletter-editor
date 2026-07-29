@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice AI Space — Newsletter Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ui-bg:#f3f4f6; --ui-ink:#111; --ui-border:#d1d5db; --accent:#2563eb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ui-bg);font-family:Inter,Helvetica,Arial,sans-serif;color:var(--ui-ink)}
+
+  /* ---------- Top bar ---------- */
+  .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;
+    padding:10px 16px;background:#000;color:#fff;flex-wrap:wrap}
+  .topbar .brand{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:18px;margin-right:auto}
+  .topbar .brand em{font-weight:400}
+  .topbar button{font:inherit;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+    padding:8px 14px;border:1px solid #fff;background:#000;color:#fff;cursor:pointer}
+  .topbar button:hover{background:#222}
+  .topbar button.primary{background:#fff;color:#000}
+  .topbar button.primary:hover{background:#e5e5e5}
+  #save-state{font-size:11px;color:#a1a1aa;min-width:64px;text-align:right}
+
+  .hintbar{max-width:920px;margin:14px auto 0;padding:0 16px;font-size:12px;color:#555;line-height:1.6;text-align:center}
+  .hintbar b{color:#111}
+
+  /* ---------- Stage / preview ---------- */
+  #stage{padding:20px 16px 80px}
+  #email-root{width:600px;max-width:100%;margin:0 auto;background:#fff;
+    box-shadow:0 1px 4px rgba(0,0,0,.15);min-height:200px}
+  #email-root:empty::after{content:'No content loaded. Click “Paste HTML”.';display:block;padding:60px 20px;
+    text-align:center;color:#999;font-size:13px}
+  #email-root [contenteditable]{transition:outline-color .1s}
+  #email-root [contenteditable]:hover{outline:1px dashed rgba(37,99,235,.6);outline-offset:1px}
+  #email-root [contenteditable]:focus{outline:2px solid var(--accent);outline-offset:1px}
+  #email-root img{cursor:pointer}
+
+  /* ---------- Overlays ---------- */
+  #overlay-layer{position:absolute;top:0;left:0;width:100%;height:0;z-index:40;pointer-events:none}
+  .ov{position:absolute;pointer-events:auto}
+  .hidden{display:none!important}
+  #sec-controls{display:flex;gap:2px;background:#000;padding:3px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+  #sec-controls button{font-size:13px;line-height:1;width:28px;height:26px;border:0;background:#000;color:#fff;cursor:pointer}
+  #sec-controls button:hover{background:#333}
+  #sec-controls button[data-act="del"]:hover{background:#b91c1c}
+  #link-chip{font-size:11px;font-weight:700;border:0;background:var(--accent);color:#fff;
+    padding:4px 8px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+
+  /* ---------- Modals ---------- */
+  #modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
+    display:flex;align-items:center;justify-content:center;padding:20px}
+  .modal{background:#fff;width:640px;max-width:100%;max-height:85vh;overflow:auto;
+    padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+  .modal h2{margin:0 0 6px;font-family:'Playfair Display',Georgia,serif;font-size:20px}
+  .modal p.note{margin:0 0 14px;font-size:12px;color:#666;line-height:1.5}
+  .modal label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+    margin:12px 0 4px;color:#333}
+  .modal input[type=text], .modal textarea{width:100%;font:12px/1.5 ui-monospace,Menlo,monospace;
+    padding:8px;border:1px solid var(--ui-border);background:#fafafa}
+  .modal textarea{height:260px;resize:vertical;white-space:pre-wrap}
+  .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+  .modal .row button{font:inherit;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+    padding:8px 16px;cursor:pointer;border:1px solid #000;background:#fff;color:#000}
+  .modal .row button.primary{background:#000;color:#fff}
+  .modal img.preview{max-width:120px;max-height:120px;display:block;margin-top:8px;border:1px solid var(--ui-border)}
+
+  /* ---------- Toast ---------- */
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
+    background:#000;color:#fff;font-size:13px;padding:10px 18px;box-shadow:0 4px 16px rgba(0,0,0,.4);
+    opacity:0;transition:opacity .2s;pointer-events:none}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">Voice AI / <em>Space</em> — Newsletter Editor</div>
+  <button id="btn-import">Paste HTML</button>
+  <button id="btn-undo" title="Undoes section / link / image changes. For text edits use ⌘Z inside the text.">Undo</button>
+  <button id="btn-reset" title="Discard everything and reload the built-in Episode 7 template">Reset</button>
+  <button id="btn-copy" class="primary">Copy HTML</button>
+  <span id="save-state"></span>
+</header>
+
+<div class="hintbar">
+  <b>Click any text</b> to edit it in place &nbsp;·&nbsp; <b>Hover a link</b> and click the blue chip to change its URL
+  &nbsp;·&nbsp; <b>Click an image</b> to swap it &nbsp;·&nbsp; <b>Hover a section</b> for move / duplicate / delete
+  &nbsp;·&nbsp; When done, <b>Copy HTML</b> and paste it back into beehiiv. Your work autosaves in this browser.
+</div>
+
+<main id="stage">
+  <div id="email-root"></div>
+</main>
+
+<div id="overlay-layer">
+  <div id="sec-controls" class="ov hidden">
+    <button data-act="up" title="Move section up">↑</button>
+    <button data-act="down" title="Move section down">↓</button>
+    <button data-act="dup" title="Duplicate section">⧉</button>
+    <button data-act="del" title="Delete section">✕</button>
+  </div>
+  <button id="link-chip" class="ov hidden">🔗 Edit link</button>
+</div>
+
+<div id="modal-backdrop" class="hidden">
+  <div class="modal hidden" id="modal-import">
+    <h2>Paste newsletter HTML</h2>
+    <p class="note">Paste the full HTML of an issue (e.g. from beehiiv's HTML block). It replaces what's currently in the editor.</p>
+    <textarea id="import-text" placeholder="<table border=&quot;0&quot; …>"></textarea>
+    <div class="row">
+      <button data-close>Cancel</button>
+      <button class="primary" id="btn-import-load">Load</button>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="modal-link">
+    <h2>Edit link</h2>
+    <p class="note" id="link-text-note"></p>
+    <label for="link-url">URL</label>
+    <input type="text" id="link-url">
+    <div class="row">
+      <button data-close>Cancel</button>
+      <button class="primary" id="btn-link-apply">Apply</button>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="modal-image">
+    <h2>Edit image</h2>
+    <label for="img-src">Image URL</label>
+    <input type="text" id="img-src">
+    <label for="img-alt">Alt text</label>
+    <input type="text" id="img-alt">
+    <img class="preview" id="img-preview" alt="">
+    <div class="row">
+      <button data-close>Cancel</button>
+      <button class="primary" id="btn-img-apply">Apply</button>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="modal-export">
+    <h2>Copy HTML</h2>
+    <p class="note">Clipboard access was blocked, so copy it manually: click the box, then ⌘A ⌘C.</p>
+    <textarea id="export-text" readonly></textarea>
+    <div class="row">
+      <button data-close>Close</button>
+      <button class="primary" id="btn-export-select">Select all</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="text/html" id="default-template"><table border="0" cellpadding="0" cellspacing="0" width="600" align="center" class="wrap" style="width:100%;max-width:600px;margin:0 auto"><tbody><tr><td style="padding:0;padding-bottom:20px!important;"><div style="max-width:600px;margin:0 auto"><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="line-height:10px"><tbody><tr><td style="line-height:10px;">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-top:2px solid #000001;border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="middle" align="left" style="padding:14px 0"><div style="font-size:24px"><a href="https://voiceaispace.com" style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:24px;font-weight:700;color:#000001;text-decoration:none;letter-spacing:-.5px" class="logo">Voice AI / <em style="font-weight:400;font-style:italic">Space</em></a></div></td><td valign="middle" align="right" style="padding:14px 0"><div style="font-size:10px"><span style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;color:#777;letter-spacing:2px;text-transform:uppercase" class="issue">July 28, 2026 | Ep. #7</span></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap navtbl" style="table-layout:fixed;border-bottom:2px solid #000001"><tbody><tr><td width="16%" align="center" class="nit navtop" valign="middle" style="width:16%;border-right:1px solid #000001;padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:none;display:block;letter-spacing:1px;text-transform:uppercase" class="nav">Home</a></div></td><td width="16%" align="center" class="nit navtop" valign="middle" style="width:16%;border-right:1px solid #000001;padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com/Library" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:none;display:block;letter-spacing:1px;text-transform:uppercase" class="nav">Library</a></div></td><td width="16%" align="center" class="nit navtop navend" valign="middle" style="width:16%;border-right:1px solid #000001;padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com/News" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:none;display:block;letter-spacing:1px;text-transform:uppercase" class="nav">News</a></div></td><td width="21%" align="center" class="nit" valign="middle" style="width:21%;border-right:1px solid #000001;padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com/Knowledge" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:none;display:block;letter-spacing:1px;text-transform:uppercase" class="nav">Knowledge</a></div></td><td width="15%" align="center" class="nit" valign="middle" style="width:15%;border-right:1px solid #000001;padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com/Jobs" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:none;display:block;letter-spacing:1px;text-transform:uppercase" class="nav">Jobs</a></div></td><td width="16%" align="center" class="navend niv" valign="middle" style="width:16%;background-color:#000001;padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com/Events" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#fffffe;text-decoration:none;display:block;letter-spacing:1px;text-transform:uppercase" class="navev">Events</a></div></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><th align="left" class="pad mob-stack split sd" style="border-right:1px solid #000001;padding:30px 0" valign="top" width="65%"><table border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left"><div style="font-size:30px;line-height:36px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:30px;font-weight:700;color:#000001;line-height:36px" class="tt inhd">Episode #7</span></div><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="inbd">The VoiceAISpace Newsletter</div></td><td width="20">&nbsp;</td></tr></tbody></table></th><th align="left" class="pad mob-stack split" style="padding:30px 0" valign="top" width="35%" dir="rtl"><table border="0" cellpadding="0" cellspacing="0" width="100%" dir="ltr"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left"><table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody><tr><td style="background-color:#000001;padding:6px 12px 4px;font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">This Issue</td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:11px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#000001;font-weight:400" class="inmt">3 × News<br>2 × Products<br>1 × Spotlight<br>Space Updates</div></td><td width="20">&nbsp;</td></tr></tbody></table></th></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="background-color:#000001;border-bottom:1px solid #000001"><tbody><tr><td width="20%" align="left" class="hcell" valign="middle" style="background-color:#000001;border-right:1px solid #000001;padding:0 0 12px 14px"><div style="font-size:68px;line-height:72px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:68px;font-weight:700;color:#fffffe;line-height:72px;letter-spacing:-4px" class="hnum secnm">03</span></div></td><td width="80%" align="left" class="hcell" valign="middle" style="background-color:#000001;padding:16px 20px"><div style="font-size:30px;line-height:34px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:30px;font-weight:700;color:#fffffe;line-height:34px;letter-spacing:-.5px" class="tt sectt">News</span></div><div style="line-height:6px;font-size:6px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#a1a1aa;font-weight:400" class="subt">The Good, The Bad &amp; The Funky</div></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody><tr><td style="background-color:#000001;padding:6px 12px 4px;font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">The Good</td></tr></tbody></table><div style="line-height:8px;font-size:8px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">A UC Davis neuroscientist just won the 2026 Chen Institute and Science Prize for turning brain signals back into speech.<br><br>Sergey Stavisky's team built an implant and AI pipeline that let a man with ALS, who'd lost the ability to speak, generate fluent sentences again, first as text, then as synthetic speech modeled on his own pre-ALS voice.<br><br>Two years in, he's produced 2.7 million words at better than 99% accuracy. He's also back working full-time in climate advocacy, on video calls and writing to colleagues, using only his brain signals. The system picks up enough of his intonation that he can sing through it.</div><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:10px"><a href="https://www.aaas.org/news/winner-chen-institute-and-science-prize-uses-ai-rebuild-speech-brain-signals" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:1px;text-transform:uppercase" class="cta">Read more →</a></div><div style="line-height:8px;font-size:8px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd"><br><strong>Why we like it</strong>:<br>There's a lot of voice AI news about cloning and misuse right now. This one's just a guy getting his voice back and his job and his family conversations along with it. We thought this was pretty heartfelt.</div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody><tr><td style="background-color:#000001;padding:6px 12px 4px;font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">The Bad</td></tr></tbody></table><div style="line-height:8px;font-size:8px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">A federal court sent former NPR host David Greene's AI-voice lawsuit against Google back to state court. Greene says Google's NotebookLM "Audio Overviews" feature uses a male voice that copies his delivery and cadence from years on Morning Edition, without his permission. Google argued the case really belonged in federal court under copyright law. The judge disagreed: Greene's claims are about what the AI outputs, not what it was trained on, so his right-of-publicity claim can go ahead under state law. Google maintains the voice belongs to a paid actor who has nothing to do with Greene.</div><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:10px"><a href="https://www.vitallaw.com/news/publicity-rights-n-d-cal-federal-court-sends-npr-host-s-ai-voice-lawsuit-back-to-state-court-finding-claims-target-output-not-input/ipm013651133865254181af4d94d5a6a3b36c?refURL=https%3A%2F%2Fnews.google.com%2F" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:1px;text-transform:uppercase" class="cta">Read more →</a></div><div style="line-height:8px;font-size:8px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd"><br><strong>Why we're flagging it</strong>:<br>The procedural detail is the real story here. Courts are starting to separate "what does the voice sound like" from "how was the model built," and that distinction is going to matter a lot more than this one lawsuit. Keep an eye on it.</div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody><tr><td style="background-color:#000001;padding:6px 12px 4px;font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">The Funky</td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">Hinge's founder just raised $18M to build a dating company that insists it isn't a dating app. It's built around voice instead.<br><br>Justin McLeod, who stepped down as Hinge CEO last year, is launching Overtone with backing from Match Group (Hinge, Tinder, and OkCupid's parent company), FirstMark Capital, and Pace Capital. No profiles, no swiping, no feed. Overtone gets to know each person "in their own voice," then makes a handful of curated introductions and explains why it made them.<br><br>Relationship expert Esther Perel joined the board. It launches later this year, in select cities.</div><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:10px"><a href="https://techcrunch.com/2026/07/14/the-founder-of-hinge-raised-18m-to-build-a-new-ai-dating-service-overtone/" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:1px;text-transform:uppercase" class="cta">Read more →</a></div><div style="line-height:8px;font-size:8px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd"><br><strong>Why we like it</strong>:<br>The guy who built the swipe-first playbook is betting against it now, and voice is how he's doing it. Not AI writing your opening line for you. AI actually listening to you talk about yourself, then making the call. Whether it works is a different question, but it's a genuinely different bet on what voice can do in a product than the usual "AI wingman" pitch.</div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="middle" align="left" style="padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com/news" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:2px;text-transform:uppercase" class="mcta">More news →</a></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="background-color:#000001;border-bottom:1px solid #000001"><tbody><tr><td width="80%" align="left" class="hcell" valign="middle" style="background-color:#000001;border-right:1px solid #000001;padding:16px 20px"><div style="font-size:30px;line-height:34px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:30px;font-weight:700;color:#fffffe;line-height:34px;letter-spacing:-.5px" class="tt sectt">Products</span></div><div style="line-height:6px;font-size:6px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#a1a1aa;font-weight:400" class="subt">Voice AI putting in the work</div></td><td width="20%" align="right" class="hcell" valign="middle" style="background-color:#000001;padding:0 14px 12px 0" dir="rtl"><div style="font-size:68px;line-height:72px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:68px;font-weight:700;color:#fffffe;line-height:72px;letter-spacing:-4px;text-align:right" class="hnum secnm">02</span></div></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><th align="left" class="pad mob-stack split sd" style="border-right:1px solid #000001;padding:30px 0" valign="top" width="50%"><table border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left"><table border="0" cellpadding="0" cellspacing="0"><tbody><tr><td valign="middle"><a href="https://www.flowtica.ai/" style="text-decoration:none;display:block;font-size:0;line-height:0"><img alt="Flowtica Scribe" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/31da7467-9fcd-4722-b4d5-805fd0f53949/Flowtica.jpg?t=1785162608" style="display:block;width:40px;height:40px;border-radius:4px" width="40" height="40"></a></td><td valign="middle" style="padding:0 0 0 10px"><div style="font-size:14px;line-height:1"><span style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;color:#777;letter-spacing:2px;text-transform:uppercase">#1</span></div></td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:15px;line-height:21px;padding:0 0 20px"><a href="https://www.flowtica.ai/" style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:15px;font-weight:700;color:#000001;text-decoration:none;display:block;line-height:21px" class="ithd">Flowtica Scribe, the pen that remembers your meetings</a></div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">Scribe looks and writes like a normal gel pen, but it records your meetings while you take notes by hand. Flowtica transcribes and summarizes everything, makes every session searchable in plain language, and lets you ask questions about past meetings ("what did we decide about pricing?"). Handwritten notes and whiteboard shots come in through your phone camera and get merged with the audio context. Recordings are encrypted on the device and never used to train third-party AI. Born on Kickstarter, it won a CES Innovation Award this year, and the pen costs $149 with a free software tier to start.<br><br><strong>Why we like it</strong>:<br>There are a few reasons. Pens have been an important part of our lives. We have written love letters with them, chewed on them, and got our fingers dirty because of them. Some predict voice tech may announce the end of handwriting; we hope that never happens, so seeing voice AI integrated into something this personal makes us happy.<br><br>And while a lot of new voice hardware is exciting, this one stands out because it is not trying to be one more thing to carry. It improves something that already exists.</div><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:10px"><a href="https://www.flowtica.ai/" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:1px;text-transform:uppercase" class="cta">Check out Flowtica →</a></div></td><td width="20">&nbsp;</td></tr></tbody></table></th><th align="left" class="pad mob-stack split" style="padding:30px 0" valign="top" width="50%" dir="rtl"><table border="0" cellpadding="0" cellspacing="0" width="100%" dir="ltr"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left"><table border="0" cellpadding="0" cellspacing="0" dir="ltr"><tbody><tr><td valign="middle"><a href="https://crankgpt.com/" style="text-decoration:none;display:block;font-size:0;line-height:0"><img alt="CrankGPT" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/7f0ea8f6-faa4-4b31-bc7a-0f53ab5f7206/CrankGPT.jpg?t=1785162608" style="display:block;width:40px;height:40px;border-radius:4px" width="40" height="40"></a></td><td valign="middle" style="padding:0 0 0 10px"><div style="font-size:14px;line-height:1"><span style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;color:#777;letter-spacing:2px;text-transform:uppercase">#2</span></div></td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:15px;line-height:21px;padding:0 0 20px"><a href="https://crankgpt.com/" style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:15px;font-weight:700;color:#000001;text-decoration:none;display:block;line-height:21px" class="ithd">CrankGPT, the AI you have to physically crank</a></div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">Their landing page opens with a question for the ages: "What do climate change, wealth concentration, and your flabby arms have in common?" The answer is CrankGPT: a fully local, fully private AI that runs on a Raspberry Pi and is powered by you, turning a hand crank. No wall socket, no Wi-Fi, no data center. Just you, cranking, asking a question out loud, and a small language model answering. There is even a button on the site that says "Is this real?" and honestly, fair.<br><br>And yes, it is a voice agent. You talk to it and it talks back, running a small model entirely on-device through a microphone hat. Our favorite detail: when the model is thinking, the crank literally gets harder to turn. It is the first AI product where you can feel the compute in your biceps.<br><br><strong>Why we like it</strong>:<br>it is satire you can build (~$300 in parts, plans being published, voice agent already on GitHub), and satire with a point. While the industry measures itself in gigawatts, two ex-Googlers built an AI whose entire energy bill is your arm, and called it "rightsizing AI: use the appropriate tool for the job." That is the ecology message we wish more of the industry would say out loud: not every question needs a data center. A funny project, an early-stage crazy idea, out of the box, and acting for the good. Basically our whole editorial compass in one hand crank.<br><br>Read more → <a href="https://crankgpt.com/" style="color:#000001;text-decoration:underline">CrankGPT</a> · <a href="https://www.theregister.com/offbeat/2026/06/11/hand-cranked-ai-box-lets-you-get-a-workout-while-you-wait-for-answers/5254333" style="color:#000001;text-decoration:underline">The Register</a>, Jun 11 · <a href="https://www.hackster.io/news/crankgpt-is-guaranteed-to-make-you-cranky-fe63af18547c" style="color:#000001;text-decoration:underline">Hackster.io</a></div><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:10px"><a href="https://squeezlabs.github.io/handcrank/" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:1px;text-transform:uppercase" class="cta">Build your own →</a></div></td><td width="20">&nbsp;</td></tr></tbody></table></th></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="middle" align="left" style="padding:10px 0"><div style="font-size:10px"><a href="https://voiceaispace.com/products" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:2px;text-transform:uppercase" class="mcta">More products →</a></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="background-color:#000001;border-bottom:1px solid #000001"><tbody><tr><td width="20%" align="left" class="hcell" valign="middle" style="background-color:#000001;border-right:1px solid #000001;padding:0 0 12px 14px"><div style="font-size:68px;line-height:72px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:68px;font-weight:700;color:#fffffe;line-height:72px;letter-spacing:-4px" class="hnum secnm">01</span></div></td><td width="80%" align="left" class="hcell" valign="middle" style="background-color:#000001;padding:16px 20px"><div style="font-size:30px;line-height:34px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:30px;font-weight:700;color:#fffffe;line-height:34px;letter-spacing:-.5px" class="tt sectt">Spotlight</span></div><div style="line-height:6px;font-size:6px">&nbsp;</div><div style="font-size:13px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#fffffe;font-weight:400" class="subt">James Zammit, Co-founder &amp; CEO @ Roark.ai</div><div style="font-size:12px;line-height:18px;font-family:Inter,Helvetica,Arial,sans-serif;color:#a1a1aa" class="dksb">Interview</div></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td valign="top" align="left"><img alt="Founder spotlight" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/97db5115-6fb1-4981-9fa7-832adb4d91fa/Ep7-spotlight.jpg?t=1785161849" style="display:block;width:100%;height:auto" width="100%"></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">A year ago James flew in from San Francisco to speak at one of our first events, at the <a href="https://youtu.be/J4KqNmwRNSk?si=z4HUw7CRMqclKHdB" style="color:#000001;text-decoration:underline">Google office in London</a>. He is one of the nicest people in this industry. With his co-founder Daniel Gauci he is tackling something we believe is essential to the well-being of the whole ecosystem: agent observability. Voice agents will only earn real trust if someone makes sure they do not lose their heads mid-call, or at least tells you the moment they do. That is the job Roark (YC Winter 2025) has taken on.<br><br>So we asked this ex-AngelList engineer turned YC founder our usual three questions to understand the path that led him to voice agent testing.<br><br><strong style="color:#000001">How did you end up in voice?</strong><br>Daniel and I started Roark because we were building voice agents ourselves and quickly realized we were flying blind. Every time we changed a prompt, model, or part of the call flow, we had no reliable way to know whether the agent had improved or broken. The only option was to call it manually, sometimes hundreds of times and listen through the results. That pain became Roark. We initially focused on analytics for live voice-agent calls, then quickly expanded into automated testing and simulations. We joined Y Combinator's Winter 2025 batch, and it has been a whirlwind ever since. Today, Roark has processed millions of minutes across live call monitoring and simulations, and is used by teams at organizations including BCG, Spectrum, Podium, and many others building serious voice AI products.<br><br><strong style="color:#000001">What's your struggle or moment of joy with voice?</strong><br>The biggest challenge was accepting that voice agents cannot be tested like normal software. You can test an API by checking whether it returns the right value. A voice agent might complete the task and still interrupt the caller, misunderstand their intent, sound unnatural, ignore a policy, or take ten seconds to respond. Our breakthrough was realizing that testing had to happen at the conversation level. Instead of checking a handful of fixed outputs, Roark simulates complete calls across hundreds or thousands of scenarios and measures what actually matters: whether the agent followed the flow, handled interruptions, responded quickly, stayed compliant, and gave the caller a good experience. That changed Roark from an analytics product into the testing and quality platform we wished had existed when we were building voice agents ourselves.<br><br><strong style="color:#000001">Where do you think voice is going?</strong><br>Voice AI is moving from demos to real infrastructure. These agents are already answering support calls, qualifying leads, booking appointments, collecting payments, and handling conversations that directly affect customers and businesses. Soon, calling an AI agent will feel completely normal. But the industry will only reach that scale if teams can trust what their agents are doing. Our vision is for every voice-agent interaction, simulated or live to be automatically tested, measured, and improved. Teams should know when a release introduces a regression, where conversations are failing, and what needs to change without manually listening to thousands of calls. We want Roark to become the quality layer behind the voice AI industry: the system that helps teams ship faster without sacrificing reliability, safety, or customer experience.<br><br><em>Full transparency: Roark has supported Voice AI Space for some time. This interview is part of our founder series, not a paid placement.</em></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="background-color:#000001;border-bottom:2px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="middle" align="left" style="padding:22px 0"><div style="font-size:30px;line-height:34px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:30px;font-weight:700;color:#fffffe;line-height:34px;letter-spacing:-.5px" class="tt sectt">Voice AI Space update</span></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody><tr><td style="background-color:#000001;padding:6px 12px 4px;font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">Introducing The Botcast</td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">For quite some time, we have interviewed founders building in voice AI and shared their words in text. We are keeping that format, but adding another modality… video!<br><br>The Botcast is a short-form video podcast built around five recurring questions:<br>1. Who are you, and what are you building?<br>2. How did you end up in Voice AI?<br>3. What have been your moments of joy and pain building with voice technology?<br>4. What lesson would you share with other builders?<br>5. Where do you see the Voice AI industry in the next 12 months and in the next five years?<br><br>The questions stay the same. The founders, products, perspectives, and stories do not.<br><br>Our first episode was with Zach Zuo, the founder of Flowtica that we mentioned earlier as a cool product. All the next podcasts will be published on social but also on our new YouTube channel. Don't forget to subscribe to our playlist to not miss any.</div><div style="line-height:10px;font-size:10px">&nbsp;</div><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center"><tbody><tr><td style="line-height:0;font-size:0">&nbsp;</td></tr></tbody></table><div style="line-height:18px;font-size:18px">&nbsp;</div><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center"><tbody><tr><td valign="top" align="left"><img alt="Botcast" border="1" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/d3104b32-c745-4ea3-afd9-1d139fd37b2c/Botcast.jpg?t=1785177851" style="display:block;width:100%;height:auto" width="100%"></td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:10px"><a href="https://youtube.com/playlist?list=PLHsdACbYQKyU&amp;si=c0-j6ig8lSnADXFq" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:1px;text-transform:uppercase" class="cta">The BotCast →</a></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody><tr><td style="background-color:#000001;padding:6px 12px 4px;font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">Launching the Survey</td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">In our quest to understand and map the ecosystem, one thing has been on our mind for quite some time: asking people more often.<br><br>Typeform could have been the way to go… we decided to go the DIY way.<br><br>And we shipped a survey tool… within Voice AI Space!<br><br>A good way for us to ask questions and gather feedback from the community.<br><br>Here is an example:<br><a href="https://www.voiceaispace.com/surveys/respond/225116fc-b6e1-4afb-8bd0-e9995a70d781" style="color:#000001;text-decoration:underline">VEETUP / Voice AI Community Virtual Meetup Interest</a></div><div style="line-height:15px;font-size:15px">&nbsp;</div><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center"><tbody><tr><td valign="top" align="left"><img alt="Veetup Preview" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/99626a5a-9e75-477f-8bb4-283fff21f419/Preview.jpg?t=1785178834" style="display:block;width:100%;height:auto" width="100%"></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center"><tbody><tr><td style="line-height:0;font-size:0">&nbsp;</td></tr></tbody></table><div style="line-height:18px;font-size:18px">&nbsp;</div><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center"><tbody><tr><td valign="top" align="left" style="border:1px solid #000001"><img alt="Survey example 1" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/802dec1e-a0e2-4fad-be1f-96437561a075/Survey-example-1.jpg?t=1785161848" style="display:block;width:100%;height:auto" width="100%"></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center"><tbody><tr><td style="line-height:0;font-size:0">&nbsp;</td></tr></tbody></table><div style="line-height:18px;font-size:18px">&nbsp;</div><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center"><tbody><tr><td valign="top" align="left" style="border:1px solid #000001"><img alt="Survey example 2" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/93f5d4d2-8ae4-4a77-88d8-94f1060099c5/Survey-example-2.jpg?t=1785161848" style="display:block;width:100%;height:auto" width="100%"></td></tr></tbody></table><div style="line-height:15px;font-size:15px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">Gentle reminder… Companies can now submit their update, release … on the voice ai space platform here.</div><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:10px"><a href="https://www.voiceaispace.com/articles/submit" style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:10px;font-weight:700;color:#000001;text-decoration:underline;display:block;letter-spacing:1px;text-transform:uppercase" class="cta">Submit an update →</a></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="background-color:#000001;border-bottom:2px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="middle" align="left" style="padding:22px 0"><div style="font-size:30px;line-height:34px"><span style="font-family:'Playfair Display','Times New Roman',Georgia,serif;font-size:30px;font-weight:700;color:#fffffe;line-height:34px;letter-spacing:-.5px" class="tt sectt">Support &amp; Share</span></div><div style="line-height:6px;font-size:6px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#a1a1aa;font-weight:400" class="subt"><em>Enjoyed this newsletter?</em></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">Please <a href="mailto:?subject=Thought%20you%27d%20like%20this%20-%20Voice%20AI%20Space&amp;body=Been%20reading%20Voice%20AI%20Space%2C%20figured%20you%27d%20enjoy%20it%3A%20https%3A%2F%2Fvoice-ai-space.beehiiv.com%2Fp%2Fvoice-ai-space-episode-7" style="color:#000001;text-decoration:underline">share it with others</a> interested in Voice AI, it helps us more than you think! You can also share it on <a href="https://twitter.com/intent/tweet?text=Some%20good%20Voice%20AI%20reading%3A&amp;url=https%3A%2F%2Fvoice-ai-space.beehiiv.com%2Fp%2Fvoice-ai-space-episode-7" style="color:#000001;text-decoration:underline">X</a> or <a href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fvoice-ai-space.beehiiv.com%2Fp%2Fvoice-ai-space-episode-7" style="color:#000001;text-decoration:underline">LinkedIn</a>.<br><br>If you have a Voice AI story yourself or a Startup you are building that you wish to share, feel free to <a href="mailto:tbot@voiceaispace.com?subject=I%20have%20a%20Voice%20AI%20story" style="color:#000001;text-decoration:underline">ping us</a>.<br><br>Have a lovely morning, day, evening, or night <em>wherever you might be.</em><br><br><strong>The Voice AI Space team</strong></div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tbody><tr><td style="background-color:#000001;padding:6px 12px 4px;font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">Supporter Thank You</td></tr></tbody></table><div style="line-height:10px;font-size:10px">&nbsp;</div><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">The Voice AI Space is open &amp; free thanks to the support of a few companies in the ecosystem, thank you to them:</div></td><td width="20">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap sponsors-band" style="box-sizing:border-box;table-layout:fixed;background-color:#000;border-bottom:2px solid #fff" bgcolor="#000001"><tbody><tr><td width="25%" align="center" class="spc spcfill" valign="middle"><a href="https://voice-ai-space.link/Ms3KVRT-gradium"><img alt="Gradium" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/5dd71968-4783-4275-8627-cb2ccf000283/1.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill spcr" valign="middle"><a href="https://voice-ai-space.link/agora"><img alt="Agora" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/c499a477-e382-4c56-954a-d88c70a23850/2.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill" valign="middle"><a href="https://voice-ai-space.link/qqngev0-vapiai"><img alt="Vapi" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/73001085-1603-4742-bbb5-b5fdd40220eb/3.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill spcr" valign="middle"><a href="https://voice-ai-space.link/D41ngN6-neuphonic"><img alt="Neuphonic" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/4c9aef7c-c289-442b-9945-ee9660aa461a/4.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td></tr><tr><td width="25%" align="center" class="spc spcfill" valign="middle"><a href="https://voice-ai-space.link/soniox"><img alt="Soniox" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/bdf6e0b5-316c-4073-a8f8-2d6904448c94/5.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill spcr" valign="middle"><a href="https://voice-ai-space.link/gcSCcKh-bespoken"><img alt="Bespoken AI" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/fc468d7a-d0b4-433b-96a1-99ddd3774082/6.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill" valign="middle"><a href="https://voice-ai-space.link/y7M2w4h-hamming"><img alt="Hamming" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/8ff9cf8f-afab-4525-9406-c41759e8636a/7.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill spcr" valign="middle"><a href="https://voice-ai-space.link/KUyY0kc-speechmatics"><img alt="Speechmatics" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/c1be78d5-16dc-4d54-978b-d697d9bf9bbf/8.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td></tr><tr><td width="25%" align="center" class="spc spcfill" valign="middle"><a href="https://voice-ai-space.link/LP7kGQe-deepgram"><img alt="Deepgram" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/ddb2df36-63c3-4e7e-a62a-83d834bb2e18/9.jpg?t=1781959366" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill" valign="middle"><a href="https://www.voiceaispace.com/"><img alt="VoiceAiSpace" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/cadd3767-05cd-445b-ac7e-0cb5bf242fc5/0-1.jpg?t=1781963141" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></a></td><td width="25%" align="center" class="spc spcfill dnm" valign="middle"><div class="dnm"><img alt="VoiceAiSpace" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/79dcb7b3-cfc4-45c3-8914-88e9a17e31a2/0.jpg?t=1781963141" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></div></td><td width="25%" align="center" class="spc spcfill dnm" valign="middle"><div class="dnm"><img alt="VoiceAiSpace" border="0" src="https://beehiiv-images-production.s3.amazonaws.com/uploads/asset/file/79dcb7b3-cfc4-45c3-8914-88e9a17e31a2/0.jpg?t=1781963141" style="display:block;width:100%;max-width:100%;height:auto;border:0" width="150"></div></td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="line-height:20px"><tbody><tr><td style="line-height:20px;">&nbsp;</td></tr></tbody></table><table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="background-color:#000001;border-top:1px solid #000001;border-bottom:1px solid #000001" bgcolor="#000001"><tbody><tr><td align="center" valign="middle" style="padding:12px 20px"><div style="font-size:12px;line-height:1"><span style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fffffe;line-height:1">Connect With Us</span></div></td></tr></tbody></table></div></td></tr></tbody></table></script>
+
+<script>
+(function(){
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const emailRoot = $('#email-root');
+  const stage = $('#stage');
+  const secControls = $('#sec-controls');
+  const linkChip = $('#link-chip');
+  const backdrop = $('#modal-backdrop');
+  const toast = $('#toast');
+  const STORAGE_KEY = 'vas-newsletter-editor-html';
+
+  let sectionContainer = null;
+  let currentSection = null;   // section under the cursor (for overlay controls)
+  let currentLink = null;      // link under the cursor (for the chip)
+  let editingLink = null;      // link being edited in the modal
+  let editingImage = null;     // image being edited in the modal
+  const undoStack = [];
+
+  /* ---------- Loading & marking ---------- */
+
+  function markEditables(root){
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while((node = walker.nextNode())){
+      if(!node.nodeValue.trim()) continue;  // skips whitespace and &nbsp; spacers
+      const el = node.parentElement;
+      if(el && el !== root){
+        el.setAttribute('contenteditable', 'true');
+        el.setAttribute('spellcheck', 'false');
+      }
+    }
+  }
+
+  // The pasted markup nests everything in one deep wrapper; the element holding
+  // the most direct <table> children is treated as the list of sections.
+  function findSectionContainer(){
+    let best = null, bestCount = 0;
+    emailRoot.querySelectorAll('*').forEach(el => {
+      const count = [...el.children].filter(ch => ch.tagName === 'TABLE').length;
+      if(count > bestCount){ bestCount = count; best = el; }
+    });
+    return bestCount >= 3 ? best : null;
+  }
+
+  function loadHTML(html, save){
+    emailRoot.innerHTML = html;
+    markEditables(emailRoot);
+    sectionContainer = findSectionContainer();
+    hideOverlays();
+    if(save) scheduleSave();
+  }
+
+  // Browsers wrap new lines typed in contenteditable in attribute-less <div>s;
+  // the design uses <br> exclusively, so convert any such wrappers back.
+  function unwrapEditingDivs(scope){
+    scope.querySelectorAll('div').forEach(div => {
+      if(div.attributes.length) return;  // design divs always carry style/class
+      const frag = document.createDocumentFragment();
+      if(div.previousSibling) frag.appendChild(document.createElement('br'));
+      const loneBr = div.childNodes.length === 1 && div.firstChild.nodeName === 'BR';
+      if(!loneBr){ while(div.firstChild) frag.appendChild(div.firstChild); }
+      div.replaceWith(frag);
+    });
+  }
+
+  function getCleanHTML(){
+    const clone = emailRoot.cloneNode(true);
+    clone.querySelectorAll('[contenteditable]').forEach(el => {
+      el.removeAttribute('contenteditable');
+      el.removeAttribute('spellcheck');
+    });
+    unwrapEditingDivs(clone);  // after attribute strip, so marked divs qualify
+    return clone.innerHTML.trim();
+  }
+
+  /* ---------- Autosave & undo ---------- */
+
+  let saveTimer = null;
+  function setSaveState(text){ $('#save-state').textContent = text; }
+  function scheduleSave(){
+    setSaveState('Saving…');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try{ localStorage.setItem(STORAGE_KEY, getCleanHTML()); setSaveState('Saved ✓'); }
+      catch(e){ setSaveState('Save failed'); }
+    }, 400);
+  }
+
+  function pushSnapshot(){
+    undoStack.push(getCleanHTML());
+    if(undoStack.length > 50) undoStack.shift();
+  }
+
+  /* ---------- Overlays (section controls + link chip) ---------- */
+
+  function placeOverlay(el, target, offsetTop, alignRight){
+    const r = target.getBoundingClientRect();
+    el.classList.remove('hidden');
+    const w = el.offsetWidth;
+    el.style.top = (r.top + window.scrollY + offsetTop) + 'px';
+    el.style.left = (alignRight ? r.right + window.scrollX - w - 4 : r.left + window.scrollX) + 'px';
+  }
+  function showSecControls(sec){ placeOverlay(secControls, sec, 4, true); }
+  function showLinkChip(a){ placeOverlay(linkChip, a, -24, false); }
+  function hideOverlays(){
+    secControls.classList.add('hidden');
+    linkChip.classList.add('hidden');
+    currentSection = null;
+    currentLink = null;
+  }
+
+  document.addEventListener('mousemove', e => {
+    if(e.target.closest('#overlay-layer')) return;  // keep overlays while hovering them
+    if(!backdrop.classList.contains('hidden')) return;
+    const inStage = stage.contains(e.target);
+
+    const a = inStage ? e.target.closest('#email-root a') : null;
+    if(a){ currentLink = a; showLinkChip(a); }
+    else if(currentLink){ currentLink = null; linkChip.classList.add('hidden'); }
+
+    let sec = null;
+    if(inStage && sectionContainer){
+      sec = [...sectionContainer.children].find(ch => ch.contains(e.target)) || null;
+    }
+    if(sec){ currentSection = sec; showSecControls(sec); }
+    else if(currentSection){ currentSection = null; secControls.classList.add('hidden'); }
+  });
+
+  ['scroll','resize'].forEach(ev => window.addEventListener(ev, () => {
+    if(currentSection) showSecControls(currentSection);
+    if(currentLink) showLinkChip(currentLink);
+  }, {passive: true}));
+
+  /* ---------- Section actions ---------- */
+
+  secControls.addEventListener('click', e => {
+    const act = e.target.dataset.act;
+    const sec = currentSection;
+    if(!act || !sec) return;
+    if(act === 'del' && !confirm('Delete this section?')) return;
+    pushSnapshot();
+    if(act === 'up' && sec.previousElementSibling){
+      sec.parentElement.insertBefore(sec, sec.previousElementSibling);
+    }else if(act === 'down' && sec.nextElementSibling){
+      sec.parentElement.insertBefore(sec.nextElementSibling, sec);
+    }else if(act === 'dup'){
+      sec.parentElement.insertBefore(sec.cloneNode(true), sec.nextSibling);
+    }else if(act === 'del'){
+      sec.remove();
+      hideOverlays();
+    }
+    if(act !== 'del') showSecControls(sec);
+    scheduleSave();
+  });
+
+  /* ---------- Modals ---------- */
+
+  function openModal(name){
+    backdrop.classList.remove('hidden');
+    backdrop.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+    $('#modal-' + name).classList.remove('hidden');
+    hideOverlays();
+  }
+  function closeModal(){ backdrop.classList.add('hidden'); }
+  backdrop.addEventListener('click', e => {
+    if(e.target === backdrop || e.target.hasAttribute('data-close')) closeModal();
+  });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+  /* ---------- Links ---------- */
+
+  emailRoot.addEventListener('click', e => {
+    const a = e.target.closest('a');
+    if(a) e.preventDefault();  // never navigate away while editing
+    const img = e.target.closest('img');
+    if(img){
+      editingImage = img;
+      $('#img-src').value = img.getAttribute('src') || '';
+      $('#img-alt').value = img.getAttribute('alt') || '';
+      $('#img-preview').src = img.getAttribute('src') || '';
+      openModal('image');
+    }
+  });
+
+  linkChip.addEventListener('click', () => {
+    if(!currentLink) return;
+    editingLink = currentLink;
+    $('#link-url').value = editingLink.getAttribute('href') || '';
+    const label = editingLink.textContent.trim();
+    $('#link-text-note').textContent = label
+      ? 'Link on: “' + (label.length > 80 ? label.slice(0, 80) + '…' : label) + '” — edit the text directly in the preview.'
+      : 'This link wraps an image.';
+    openModal('link');
+  });
+
+  $('#btn-link-apply').addEventListener('click', () => {
+    if(editingLink){
+      pushSnapshot();
+      editingLink.setAttribute('href', $('#link-url').value.trim());
+      scheduleSave();
+    }
+    closeModal();
+    showToast('Link updated');
+  });
+
+  /* ---------- Images ---------- */
+
+  $('#img-src').addEventListener('input', () => { $('#img-preview').src = $('#img-src').value.trim(); });
+
+  $('#btn-img-apply').addEventListener('click', () => {
+    if(editingImage){
+      pushSnapshot();
+      editingImage.setAttribute('src', $('#img-src').value.trim());
+      editingImage.setAttribute('alt', $('#img-alt').value.trim());
+      scheduleSave();
+    }
+    closeModal();
+    showToast('Image updated');
+  });
+
+  /* ---------- Text editing ---------- */
+
+  emailRoot.addEventListener('input', scheduleSave);
+
+  // Enter must produce a <br> (the design's line-break convention), not the
+  // <div> wrappers browsers insert by default.
+  emailRoot.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      document.execCommand('insertHTML', false, '<br>');
+    }
+  });
+
+  // Paste as plain text so outside formatting never leaks into the design
+  emailRoot.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+  });
+
+  /* ---------- Toolbar ---------- */
+
+  $('#btn-import').addEventListener('click', () => {
+    $('#import-text').value = '';
+    openModal('import');
+    $('#import-text').focus();
+  });
+
+  $('#btn-import-load').addEventListener('click', () => {
+    const html = $('#import-text').value.trim();
+    if(!html){ showToast('Nothing to load'); return; }
+    pushSnapshot();
+    loadHTML(html, true);
+    closeModal();
+    showToast('HTML loaded');
+  });
+
+  $('#btn-copy').addEventListener('click', async () => {
+    const html = getCleanHTML();
+    try{
+      await navigator.clipboard.writeText(html);
+      showToast('HTML copied — paste it into beehiiv');
+    }catch(err){
+      $('#export-text').value = html;
+      openModal('export');
+    }
+  });
+
+  $('#btn-export-select').addEventListener('click', () => {
+    const t = $('#export-text');
+    t.focus(); t.select();
+    document.execCommand('copy');
+    showToast('Copied');
+  });
+
+  $('#btn-undo').addEventListener('click', () => {
+    const html = undoStack.pop();
+    if(html === undefined){ showToast('Nothing to undo (⌘Z works inside text)'); return; }
+    loadHTML(html, true);
+    showToast('Undone');
+  });
+
+  $('#btn-reset').addEventListener('click', () => {
+    if(!confirm('Discard all changes and reload the built-in template?')) return;
+    pushSnapshot();
+    localStorage.removeItem(STORAGE_KEY);
+    loadHTML(defaultTemplate(), false);
+    setSaveState('');
+    showToast('Template restored');
+  });
+
+  /* ---------- Misc ---------- */
+
+  let toastTimer = null;
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  function defaultTemplate(){ return document.getElementById('default-template').innerHTML.trim(); }
+
+  // expose for console/testing
+  window.getCleanHTML = getCleanHTML;
+
+  const saved = localStorage.getItem(STORAGE_KEY);
+  loadHTML(saved || defaultTemplate(), false);
+  if(saved) setSaveState('Saved ✓');
+})();
+</script>
+</body>
+</html>
