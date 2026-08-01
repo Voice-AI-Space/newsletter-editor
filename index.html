@@ -89,7 +89,7 @@
 
 <div class="hintbar">
   <b>Click any text</b> to edit it in place &nbsp;·&nbsp; <b>Hover a link</b> and click the blue chip to change its URL
-  &nbsp;·&nbsp; <b>Click an image</b> to swap it &nbsp;·&nbsp; <b>Hover a section</b> for move / duplicate / delete
+  &nbsp;·&nbsp; <b>Click an image</b> to swap it &nbsp;·&nbsp; <b>Hover a section</b> for move / duplicate / add text / delete
   &nbsp;·&nbsp; When done, <b>Copy HTML</b> and paste it back into beehiiv. Your work autosaves in this browser.
 </div>
 
@@ -102,6 +102,7 @@
     <button data-act="up" title="Move section up">↑</button>
     <button data-act="down" title="Move section down">↓</button>
     <button data-act="dup" title="Duplicate section">⧉</button>
+    <button data-act="addtext" title="Insert a plain text section below">+T</button>
     <button data-act="del" title="Delete section">✕</button>
   </div>
   <button id="link-chip" class="ov hidden">🔗 Edit link</button>
@@ -293,6 +294,11 @@
 
   /* ---------- Section actions ---------- */
 
+  // A section with no header badge or table dressing: just a paragraph of
+  // body copy, matching the design's plain-text blocks (e.g. the closing
+  // "Voice AI Space team" note). Used by the "+T" add-text-section action.
+  const PLAIN_TEXT_SECTION_HTML = '<table border="0" cellpadding="0" cellspacing="0" width="100%" align="center" class="wrap" style="border-bottom:1px solid #000001"><tbody><tr><td width="20">&nbsp;</td><td valign="top" align="left" class="pad" style="padding:30px 0"><div style="font-size:14px;line-height:20px;font-family:Inter,Helvetica,Arial,sans-serif;color:#333;font-weight:400" class="itbd">New text section — click to edit.</div></td><td width="20">&nbsp;</td></tr></tbody></table>';
+
   secControls.addEventListener('click', e => {
     const act = e.target.dataset.act;
     const sec = currentSection;
@@ -305,6 +311,12 @@
       sec.parentElement.insertBefore(sec.nextElementSibling, sec);
     }else if(act === 'dup'){
       sec.parentElement.insertBefore(sec.cloneNode(true), sec.nextSibling);
+    }else if(act === 'addtext'){
+      const tpl = document.createElement('template');
+      tpl.innerHTML = PLAIN_TEXT_SECTION_HTML;
+      const newSec = tpl.content.firstElementChild;
+      markEditables(newSec);
+      sec.parentElement.insertBefore(newSec, sec.nextSibling);
     }else if(act === 'del'){
       sec.remove();
       hideOverlays();
